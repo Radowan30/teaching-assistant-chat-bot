@@ -1,4 +1,4 @@
-# FastAPI Chat Application
+# FastAPI Chat Application for teaching
 
 A chat application built with FastAPI that integrates a web search tool via the Brave Search API. This project uses modern Python features, asynchronous programming, and integrates with [logfire](https://logfire.dev) for logging and instrumentation.
 
