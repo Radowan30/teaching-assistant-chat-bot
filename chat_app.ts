@@ -74,51 +74,6 @@ function addMessages(responseText: string) {
   window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' })
 }
 
-//progress bar version, doesnt work
-// function addMessages(responseText: string) {
-//   const lines = responseText.split('\n');
-//   const messages: Message[] = lines.filter(line => line.length > 1).map(j => JSON.parse(j));
-//   for (const message of messages) {
-//     const { timestamp, role, content } = message;
-//     const id = `msg-${timestamp}`;
-//     let msgDiv = document.getElementById(id);
-    
-//     if (role === 'progress') {
-//       // Parse the JSON from the content and update a progress bar.
-//       try {
-//         const progressData = JSON.parse(content);
-//         const progressBar = document.getElementById('progress-bar');
-//         if (progressBar) {
-//           progressBar.innerText = `Animation ${progressData.animationIndex}: ${progressData.percentage}%`;
-//           progressBar.style.width = `${progressData.percentage}%`;
-//         }
-//       } catch (error) {
-//         console.error('Failed to parse progress data:', error);
-//       }
-//     } else if (role === 'video') {
-//       if (!msgDiv) {
-//         msgDiv = document.createElement('div');
-//         msgDiv.id = id;
-//         msgDiv.title = `${role} at ${timestamp}`;
-//         msgDiv.classList.add('border-top', 'pt-2', role);
-//         convElement.appendChild(msgDiv);
-//       }
-//       msgDiv.innerHTML = `<video controls width="100%" src="${content}"></video>`;
-//     } else {
-//       // For 'user' and 'model' messages.
-//       if (!msgDiv) {
-//         msgDiv = document.createElement('div');
-//         msgDiv.id = id;
-//         msgDiv.title = `${role} at ${timestamp}`;
-//         msgDiv.classList.add('border-top', 'pt-2', role);
-//         convElement.appendChild(msgDiv);
-//       }
-//       msgDiv.innerHTML = marked.parse(content);
-//     }
-//   }
-//   window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
-// }
-
 
 function onError(error: any) {
   console.error(error)

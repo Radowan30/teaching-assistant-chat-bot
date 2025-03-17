@@ -1,12 +1,4 @@
-"""Simple chat app example build with FastAPI.
-
-Run with:
-
-    uv run -m pydantic_ai_examples.chat_app
-"""
-
 from __future__ import annotations as _annotations
-
 import asyncio
 import json
 import sqlite3
@@ -40,29 +32,96 @@ from datetime import datetime
 from httpx import AsyncClient
 from dotenv import load_dotenv
 from pydantic_ai.models.openai import OpenAIModel
-from fastapi import HTTPException
+from pydantic import BaseModel, Field
+import uuid
+import subprocess
+from fastapi.staticfiles import StaticFiles
+from manimDocs import manimDocs
+from typing import Any, Dict, Union
+import importlib.util
+from manim import config
 
 load_dotenv()
 llm = os.getenv('LLM_MODEL', 'gpt-4o')
 
 model = OpenAIModel(llm)
 
+thinking_model = OpenAIModel('o3-mini')
+
+BASE_URL = os.getenv('BASE_URL', 'http://127.0.0.1:8000')
 
 # 'if-token-present' means nothing will be sent (and the example will work) if you don't have logfire configured
 logfire.configure(send_to_logfire='if-token-present')
 
 
+#Creating the main agent
 @dataclass
 class Deps:
     client: AsyncClient
     brave_api_key: str | None
 
 
+agent: Agent[None, Union[Dict[str, Any], str]] = Agent( model,
+    system_prompt=f"""You are a helpful teaching assistant.
 
-agent = Agent( model,
-    system_prompt=f'You are a helpful teaching assistant. When needed you can also be an expert at researching the web to answer user questions. You can also generate animation videos using the Manim API when the user passes a prompt that contains the keyword @video (do not invoke the generate_manim_video() tool unless this keyword is provided by the user). If the user wants a video or animation to be made and they do not mention the @video keyword, then tell them that they should pass a message that starts with the keyword, followed by the animation description. Example: @video make a circle going from left to right. The current date is: {datetime.now().strftime("%Y-%m-%d")}',
+    When needed you can be an expert at researching the web to answer user questions using the search_web() tool. 
+
+    You can also generate animation videos using the generate_manim_video() tool when the user passes a prompt that contains the keyword @video (do not invoke the generate_manim_video() tool unless this keyword is provided by the user), and when this tool is invoked you must return a Dict that only contains the key "video_url" with the URL to the generated video. Do not include any extra text with the Dict. It should be exactly of this format: 
+    
+    "video_url": "URL" 
+    
+    and no other text should be included in the response.  
+
+    If the user wants a video or animation to be made and they do not mention the @video keyword, then tell them that they should pass a message that starts with the keyword, followed by the animation description. Example: @video make a circle going from left to right. 
+    
+    The current date is: {datetime.now().strftime("%Y-%m-%d")}""",
     deps_type=Deps,
-    retries=2)
+    result_type=Union[Dict[str, Any], str],
+    retries=4)
+
+
+#Creating Manim Agent
+class CodeResult(BaseModel):
+    code: str = Field(
+    description="The generated Manim code for the video."
+    )
+
+manim_agent = Agent(
+    thinking_model,
+    deps_type=str,
+    result_type=CodeResult,
+    retries=1,
+    system_prompt="""You are an experienced teacher who is able to explain very well. You also know about Manim, which is a mathematical animation engine that is used to create videos programmatically using the python programming langauge. Your job is to generate Manim code that can be used to create an animation video that explains and teaches a concept very well to the audience.
+
+The following is an example of the code:
+\`\`\`
+from manim import *
+from math import *
+
+class GenScene(Scene):
+#your code here
+
+\`\`\`
+
+# Rules
+1. Always use GenScene as the class name, otherwise, the code will not work.
+2. Always use self.play() to play the animation, otherwise, the code will not work.
+3. Do not use text to explain the code, only the code.
+4. Do not explain the code, only the code.
+5. The LaTex distribution used is MikTeX.
+6. Make sure to create code so that it fits in a 16:9 aspect ratio.
+7. Make sure your code is lengthy so that the animation that will be generated from your Manim code explains the concept very well to the audience.
+8. Make sure there is text in the animation as if you are speaking to the audience. The text should fit with in the 16:9 aspect ratio and not overlap with other text.
+9. Make sure to only use the Manim library for the code.
+10. Think deeply about the animation and how it can explain the concept the best way possible.
+11. Code should be compatible with manim==0.18.0 and manim-physics==0.4.0.
+
+# Manim Library
+{manimDocs}
+
+"""
+        )
+
 
 #Web search tool
 @agent.tool
@@ -116,60 +175,132 @@ async def search_web(
 
 #Manim video generation tool
 @agent.tool
-async def generate_manim_video(ctx: RunContext, prompt: str) -> str:
-    """
-    Take the user's prompt, send it to the Manim API to generate code and render a video,
-    and return the video URL.
-    """
-    manim_api_base = "http://127.0.0.1:8080"  # Adjust if needed
+async def generate_manim_video(ctx: RunContext, prompt: str) -> Dict[str, Any]:
 
-    async with AsyncClient() as client:
+    try:
+            
+
+        manim_agent_result = await manim_agent.run(prompt)
+
+        manim_code = manim_agent_result.data.code #The 'code' field is accessible from the data object
+
+        file_name = "scene_temp"
+        file_class = "GenScene"
+
+        user_id = str(uuid.uuid4())
+        project_name = "default_project"
+        iteration = 1
+
+        video_storage_file_name = f"video-{user_id}-{project_name}-{iteration}.mp4"
+
+        frame_size, frame_width = (3840, 2160), 14.22 #16:9 aspect ratio
+
+        modified_code = f"""
+from manim import *
+from math import *
+config.frame_size = {frame_size}
+config.frame_width = {frame_width}
+
+{manim_code}
+    """
+        
+        # Create a unique file name
+        file_name = f"scene_{os.urandom(2).hex()}.py"
+
+        # Adjust the path to point to /public/
+        root_dir = os.path.dirname(__file__)  # Go up one level
+        public_dir = os.path.join(root_dir, "public")
+        os.makedirs(public_dir, exist_ok=True)  # Ensure the public directory exists
+        file_path = os.path.join(public_dir, file_name)
+
+        # Write the code to the file
+        with open(file_path, "w") as f:
+            f.write(modified_code)
+
+    
+        # video_file_path = os.path.join(public_dir, video_storage_file_name)
+
+        # Video generation logic using dynamic import and programmatic rendering
+        spec = importlib.util.spec_from_file_location("temp_scene", file_path)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        SceneClass = getattr(module, file_class)
+        
+        # Ensure Manim outputs to the public directory with the desired filename
+        config.output_file = video_storage_file_name
+        config.media_dir = "public"
+        config.custom_folders = False  # Disable folder nesting so the video goes directly into "public"
+        
+        scene = SceneClass()
+        scene.render()
+
+        video_url = f"{BASE_URL.rstrip('/')}/public/videos/2160p60/{video_storage_file_name}"
+
         try:
-            # Step 1: Generate Manim code from the prompt
-            code_generation_payload = {"prompt": prompt, "model": "gpt-4o"}
-            code_response = await client.post(
-                f"{manim_api_base}/v1/code/generation",
-                json=code_generation_payload,
-                timeout=60  # Adjust timeout as necessary
-            )
-            code_response.raise_for_status()
-            code_data = code_response.json()
-            generated_code = code_data.get("code")
-            if not generated_code:
-                raise HTTPException(status_code=500, detail="No code was generated by the Manim API.")
-
-            # Remove markdown formatting if present
-            import re
-            generated_code = re.sub(r"^```(?:python)?", "", generated_code)
-            generated_code = re.sub(r"```$", "", generated_code).strip()
-            generated_code = generated_code.replace("```", "").strip()
-
-            # Step 2: Render the video using the generated code.
-            # Here, you need to provide additional parameters required by your video rendering endpoint.
-            video_render_payload = {
-                "code": generated_code,
-                "file_name": "scene_temp",        # or generate a unique name
-                "file_class": "GenScene",          # assuming we always use GenScene unless specified
-                "user_id": "some_user_id",         # You can pass the current user id if available
-                "project_name": "default_project", # Adjust as needed
-                "iteration": 1,
-                "aspect_ratio": "16:9",
-                "stream": False,  # For simplicity, get a final result rather than a stream
-            }
-            video_response = await client.post(
-                f"{manim_api_base}/v1/video/rendering",
-                json=video_render_payload,
-                timeout=3000000  # video rendering might take longer
-            )
-            video_response.raise_for_status()
-            video_data = video_response.json()
-            video_url = video_data.get("video_url")
-            if not video_url:
-                raise HTTPException(status_code=500, detail="Video rendering failed to return a URL.")
-            return video_url
-
+            if os.path.exists(file_path):
+                os.remove(file_path)
+                print(f"Removed temporary file: {file_path}")
         except Exception as e:
-            raise HTTPException(status_code=500, detail=f"Error generating video: {str(e)}")
+            print(f"Error removing temporary file {file_path}: {e}")
+
+        return {"video_url": video_url}
+
+        # try:
+        #     command_list = [
+        #         "python",
+        #         "-m",
+        #         "manim",
+        #         file_path,  # Use the full path to the file
+        #         file_class,
+        #         "--format=mp4",
+        #         "--output_file", video_storage_file_name,
+        #         "--media_dir",
+        #         "public",
+        #         "--custom_folders",
+        #     ]
+
+        #     process = subprocess.Popen(
+        #         command_list,
+        #         stdout=subprocess.PIPE,
+        #         stderr=subprocess.PIPE,
+        #         cwd=os.path.dirname(os.path.realpath(__file__)),
+        #         text=True,
+        #         bufsize=1,  # Ensure the output is in text mode and line-buffered
+        #     )
+
+        #     stdout, stderr = process.communicate()
+
+        #     current_animation = -1
+        #     current_percentage = 0
+        #     error_output = []
+        #     in_error = False
+
+
+        #     if process.returncode == 0:
+               
+                
+        #         video_url = f"{BASE_URL.rstrip('/')}/public/{video_storage_file_name}"
+
+        #         return {"video_url": video_url}
+
+        #     else:
+        #         return {"video_url": "", "error": f"Error generating video: {stderr}"}
+            
+        # except Exception as e:
+        #     return {"video_url": "", "error": str(e)}
+        
+        # finally:
+        #     # Remove the temporary Python file
+        #     try:
+        #         if os.path.exists(file_path) and os.path.exists(video_file_path):
+        #             os.remove(file_path)
+        #             print(f"Removed temporary file: {file_path}")
+        #     except Exception as e:
+        #         print(f"Error removing temporary file {file_path}: {e}")
+
+
+    except Exception as e:
+        return {"video_url": "", "error": str(e)}
         
 
 
@@ -185,6 +316,9 @@ async def lifespan(_app: fastapi.FastAPI):
 app = fastapi.FastAPI(lifespan=lifespan)
 logfire.instrument_fastapi(app)
 
+# To enable static files, we need to mount a directory to a specific path.
+# This will allow the browser to access the files directly.
+app.mount("/public", StaticFiles(directory="public"), name="public")
 
 @app.get('/')
 async def index() -> FileResponse:
@@ -217,85 +351,7 @@ class ChatMessage(TypedDict):
     timestamp: str
     content: str
 
-#original
-# def to_chat_message(m: ModelMessage) -> ChatMessage:
-#     first_part = m.parts[0]
-#     if isinstance(m, ModelRequest):
-#         if isinstance(first_part, UserPromptPart):
-#             return {
-#                 'role': 'user',
-#                 'timestamp': first_part.timestamp.isoformat(),
-#                 'content': first_part.content,
-#             }
-#     elif isinstance(m, ModelResponse):
-#         if isinstance(first_part, TextPart):
-#             return {
-#                 'role': 'model',
-#                 'timestamp': m.timestamp.isoformat(),
-#                 'content': first_part.content,
-#             }
-#     raise UnexpectedModelBehavior(f'Unexpected message type for chat app: {m}')
 
-
-
-#Clickable link version
-# def to_chat_message(m: ModelMessage) -> ChatMessage:
-#     if isinstance(m, ModelRequest):
-#         # Look for a user prompt in the parts.
-#         for part in m.parts:
-#             if isinstance(part, UserPromptPart):
-#                 return {
-#                     'role': 'user',
-#                     'timestamp': part.timestamp.isoformat(),
-#                     'content': part.content,
-#                 }
-#         return {
-#             'role': 'user',
-#             'timestamp': m.parts[0].timestamp.isoformat(),
-#             'content': m.parts[0].content,
-#         }
-#     elif isinstance(m, ModelResponse):
-#         first_part = m.parts[0]
-#         if isinstance(first_part, TextPart):
-#             content = first_part.content.strip()
-#             # Try JSON parsing
-#             try:
-#                 data = json.loads(content)
-#                 if isinstance(data, dict) and "video_url" in data:
-#                     return {
-#                         'role': 'video',
-#                         'timestamp': m.timestamp.isoformat(),
-#                         'content': data["video_url"],
-#                     }
-#             except Exception:
-#                 pass
-
-#             # Check for explicit marker
-#             if content.startswith("VIDEO:"):
-#                 video_url = content[len("VIDEO:"):].strip()
-#                 return {
-#                     'role': 'video',
-#                     'timestamp': m.timestamp.isoformat(),
-#                     'content': video_url,
-#                 }
-            
-#             # Check if the content is a plain URL ending in .mp4
-#             if content.startswith("http") and content.endswith(".mp4"):
-#                 return {
-#                     'role': 'video',
-#                     'timestamp': m.timestamp.isoformat(),
-#                     'content': content,
-#                 }
-
-#             # Otherwise, treat it as a normal text message
-#             return {
-#                 'role': 'model',
-#                 'timestamp': m.timestamp.isoformat(),
-#                 'content': content,
-#             }
-#     raise UnexpectedModelBehavior(f'Unexpected message type for chat app: {m}')
-
-#video generation version
 def to_chat_message(m: ModelMessage) -> ChatMessage:
     if isinstance(m, ModelRequest):
         # Look for a user prompt in the parts.
@@ -320,22 +376,20 @@ def to_chat_message(m: ModelMessage) -> ChatMessage:
             try:
                 data = json.loads(content)
                 if isinstance(data, dict) and "video_url" in data:
-                    return {
-                        'role': 'video',
-                        'timestamp': m.timestamp.isoformat(),
-                        'content': data["video_url"],
-                    }
+                    if data["video_url"]:  # Only if URL is not empty
+                        return {
+                            'role': 'video',
+                            'timestamp': m.timestamp.isoformat(),
+                            'content': data["video_url"],
+                        }
+                    elif "error" in data:  # Display error as text
+                        return {
+                            'role': 'model',
+                            'timestamp': m.timestamp.isoformat(),
+                            'content': f"Video generation failed: {data['error']}",
+                        }
             except Exception:
                 pass
-
-            # Check for explicit "VIDEO:" marker.
-            if content.startswith("VIDEO:"):
-                video_url = content[len("VIDEO:"):].strip()
-                return {
-                    'role': 'video',
-                    'timestamp': m.timestamp.isoformat(),
-                    'content': video_url,
-                }
 
             # Check if the content is a plain video URL.
             # Use lower() and strip() to catch extra spaces or different cases.
@@ -353,101 +407,6 @@ def to_chat_message(m: ModelMessage) -> ChatMessage:
                 'content': content,
             }
     raise UnexpectedModelBehavior(f'Unexpected message type for chat app: {m}')
-
-
-#video generation with progress bar version
-# def to_chat_message(m: ModelMessage) -> ChatMessage:
-#     if isinstance(m, ModelRequest):
-#         # Look for a user prompt in the parts.
-#         for part in m.parts:
-#             if isinstance(part, UserPromptPart):
-#                 return {
-#                     'role': 'user',
-#                     'timestamp': part.timestamp.isoformat(),
-#                     'content': part.content,
-#                 }
-#         return {
-#             'role': 'user',
-#             'timestamp': m.parts[0].timestamp.isoformat(),
-#             'content': m.parts[0].content,
-#         }
-#     elif isinstance(m, ModelResponse):
-#         first_part = m.parts[0]
-#         if isinstance(first_part, TextPart):
-#             content = first_part.content.strip()
-#             # Try to parse the content as JSON.
-#             try:
-#                 data = json.loads(content)
-#                 # If it's a progress update, return role "progress".
-#                 if isinstance(data, dict) and "animationIndex" in data and "percentage" in data:
-#                     return {
-#                         'role': 'progress',
-#                         'timestamp': m.timestamp.isoformat(),
-#                         'content': content,
-#                     }
-#                 # If it contains a video URL, return as video.
-#                 if isinstance(data, dict) and "video_url" in data:
-#                     return {
-#                         'role': 'video',
-#                         'timestamp': m.timestamp.isoformat(),
-#                         'content': data["video_url"],
-#                     }
-#             except Exception:
-#                 pass
-
-#             # Check for an explicit marker.
-#             if content.startswith("VIDEO:"):
-#                 video_url = content[len("VIDEO:"):].strip()
-#                 return {
-#                     'role': 'video',
-#                     'timestamp': m.timestamp.isoformat(),
-#                     'content': video_url,
-#                 }
-#             # Otherwise, treat it as a normal text response.
-#             return {
-#                 'role': 'model',
-#                 'timestamp': m.timestamp.isoformat(),
-#                 'content': content,
-#             }
-#     raise UnexpectedModelBehavior(f'Unexpected message type for chat app: {m}')
-
-
-# @app.post('/chat/')
-# async def post_chat(
-#     prompt: Annotated[str, fastapi.Form()], database: Database = Depends(get_db)
-# ) -> StreamingResponse:
-#     async def stream_messages():
-#         """Streams new line delimited JSON `Message`s to the client."""
-#         # stream the user prompt so that can be displayed straight away
-#         yield (
-#             json.dumps(
-#                 {
-#                     'role': 'user',
-#                     'timestamp': datetime.now(tz=timezone.utc).isoformat(),
-#                     'content': prompt,
-#                 }
-#             ).encode('utf-8')
-#             + b'\n'
-#         )
-
-#         async with AsyncClient() as client:
-#             # get the chat history so far to pass as context to the agent
-#             messages = await database.get_messages()
-#             brave_api_key = os.getenv('BRAVE_API_KEY', None)
-#             deps = Deps(client=client, brave_api_key=brave_api_key)
-
-#             # run the agent with the user prompt and the chat history
-#             async with agent.run_stream(prompt, message_history=messages, deps=deps) as result:
-#                 async for text in result.stream(debounce_by=0.01):
-#                     # text here is a `str` and the frontend wants
-#                     # JSON encoded ModelResponse, so we create one
-#                     m = ModelResponse(parts=[TextPart(text)], timestamp=result.timestamp())
-#                     yield json.dumps(to_chat_message(m)).encode('utf-8') + b'\n'
-
-#             # add new messages (e.g. the user prompt and the agent response in this case) to the database
-#             await database.add_messages(result.new_messages_json())
-
-#     return StreamingResponse(stream_messages(), media_type='text/plain')
 
 
 @app.post('/chat/')
@@ -470,37 +429,14 @@ async def post_chat(
             brave_api_key = os.getenv('BRAVE_API_KEY', None)
             deps = Deps(client=client, brave_api_key=brave_api_key)
 
-            # Decide if this is a video generation request.
-            is_video_request = any(
-                keyword in prompt.lower() 
-                for keyword in ["@video"]
-            )
 
-            if is_video_request:
-                # Accumulate the entire response.
-                accumulated_text = ""
-                async with agent.run_stream(prompt, message_history=messages, deps=deps) as result:
-                    async for text in result.stream(debounce_by=0.01):
-                        accumulated_text += text
-                    # Extract a clean video URL (assumes URL ends with .mp4).
-                    import re
-                    match = re.search(r'(http://[^\s\)]+\.mp4)', accumulated_text)
-                    if match:
-                        clean_video_url = match.group(1)
-                    else:
-                        clean_video_url = accumulated_text
-                    final_msg = ModelResponse(
-                        parts=[TextPart(clean_video_url)],
-                        timestamp=result.timestamp()
-                    )
-                    yield json.dumps(to_chat_message(final_msg)).encode('utf-8') + b'\n'
-            else:
-                # Stream messages normally.
-                async with agent.run_stream(prompt, message_history=messages, deps=deps) as result:
-                    async for text in result.stream(debounce_by=0.01):
-                        m = ModelResponse(parts=[TextPart(text)], timestamp=result.timestamp())
-                        yield json.dumps(to_chat_message(m)).encode('utf-8') + b'\n'
+            # Stream messages normally.
+            async with agent.run_stream(prompt, message_history=messages, deps=deps) as result:
+                async for text in result.stream(debounce_by=0.01):
+                    m = ModelResponse(parts=[TextPart(text)], timestamp=result.timestamp())
+                    yield json.dumps(to_chat_message(m)).encode('utf-8') + b'\n'
 
+            
             await database.add_messages(result.new_messages_json())
 
     return StreamingResponse(stream_messages(), media_type='text/plain')

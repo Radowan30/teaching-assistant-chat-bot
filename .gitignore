@@ -8,6 +8,15 @@ wheels/
 
 # Virtual environments
 .venv
+venv311
 
 #environment variables
 .env
+.qodo
+
+#Ignore everything in the public folder
+public/*
+
+#Ignore the sqlite database
+.chat_app_messages.sqlite
+

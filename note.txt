@@ -1,0 +1,10 @@
+-install python version 3.11.x before installing the project dependencies.
+
+-you may use 'py -3.11 -m venv venv311' to setup a new virtual environment with python 3.11.x.
+
+-then use 'pip install -r requirements.txt' to install all dependencies
+
+-then you also need to install:
+1. Cairo: A 2D graphics library
+2. FFmpeg: For video rendering
+3. LaTeX: For typesetting mathematical equations

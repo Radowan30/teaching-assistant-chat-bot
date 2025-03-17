@@ -12,6 +12,7 @@ A chat application built with FastAPI that integrates a web search tool via the 
 
 ## Requirements
 
+
 - Python >= 3.12
 - Environment variables set in a `.env` file (see below).
 
