@@ -1,0 +1,22 @@
+# Python-generated files
+__pycache__/
+*.py[oc]
+build/
+dist/
+wheels/
+*.egg-info
+
+# Virtual environments
+.venv
+venv311
+
+#environment variables
+.env
+.qodo
+
+#Ignore everything in the public folder
+public/*
+
+#Ignore the sqlite database
+.chat_app_messages.sqlite
+
