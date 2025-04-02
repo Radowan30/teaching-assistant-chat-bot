@@ -288,13 +288,6 @@ config.frame_width = {frame_width}
 
         video_url = f"{BASE_URL.rstrip('/')}/public/videos/2160p60/{video_storage_file_name}"
 
-        # try:
-        #     if os.path.exists(file_path):
-        #         os.remove(file_path)
-        #         print(f"Removed temporary file: {file_path}")
-        # except Exception as e:
-        #     print(f"Error removing temporary file {file_path}: {e}")
-
         cleanup_manim_files()
         
         return {"video_url": video_url}
@@ -406,7 +399,7 @@ async def async_chat(websocket: WebSocket):
                                             already_sent_video = True
                                             collecting_video_json = False
                                             video_json_accumulator = ""
-                                            print("Sent a json with role video", flush=True)
+                                            
                                             continue
                                 
                                 except json.JSONDecodeError:
@@ -419,7 +412,7 @@ async def async_chat(websocket: WebSocket):
                             await websocket.send_text(
                                 json.dumps(to_chat_message(m))
                             )
-                            print("Sent a message with role model", flush=True)
+                            
                     
 
                     # Handle any remaining collected JSON that wasn't processed
@@ -438,7 +431,7 @@ async def async_chat(websocket: WebSocket):
                                             'content': video_data["video_url"],
                                         })
                                     )
-                                    print("Sent a json with role video in the second branch", flush=True)
+                                    
                         except:
                             # If we can't parse it as video JSON, send as regular text
                             m = ModelResponse(parts=[TextPart(video_json_accumulator)], timestamp=result.timestamp())
@@ -447,111 +440,6 @@ async def async_chat(websocket: WebSocket):
                             )
 
                     await database.add_messages(result.new_messages_json())
-
-
-
-                    # fullVideoJson = '' #to accumulate the video json response so that it is not sent in chunks
-                    # async for text in result.stream(debounce_by=0.01):
-
-                        # if text.strip().startswith("{") and (".mp4}" not in text): 
-                        #     # Just accumulate potential video JSON
-                        #     # fullVideoJson += text
-                        #     continue
-                            
-                        # elif ".mp4}" in text:
-                        #     # Complete video JSON found
-                        #     # fullVideoJson += text
-                        #     fullVideoJson = text
-                            
-                        #     try:
-                        #         # Parse the complete JSON to ensure it's valid
-                        #         video_data = json.loads(fullVideoJson)
-                        #         if isinstance(video_data, dict) and "video_url" in video_data:
-                        #             # Send direct message with video role
-                        #             await websocket.send_text(
-                        #                 json.dumps({
-                        #                     'role': 'video',
-                        #                     'timestamp': datetime.now(tz=timezone.utc).isoformat(),
-                        #                     'content': video_data["video_url"],
-                        #                 })
-                        #             )
-                        #             # Reset for next potential video
-                        #             fullVideoJson = ''
-                        #             continue
-                        #     except json.JSONDecodeError:
-                        #         # If not valid JSON, treat as regular text
-                        #         pass
-                                
-                        #     # If we get here, reset and handle as regular text
-                        #     fullVideoJson = ''
-
-                        #     # Handle regular text responses
-                        #     m = ModelResponse(parts=[TextPart(text)], timestamp=result.timestamp())
-                        #     await websocket.send_text(
-                        #         json.dumps(to_chat_message(m))
-                        #     )
-
-
-                        # m = ModelResponse(parts=[TextPart(text)], timestamp=result.timestamp())
-
-                        # if text.strip().startswith("{") and (".mp4}" not in text): #Keep getting 'text' until .mp4} substring is found
-                        #     continue
-
-                        # elif ".mp4}" in text:
-                        #     fullVideoJson = text
-
-                        #     # video_message = ModelResponse(parts=[TextPart(fullVideoJson)], timestamp=result.timestamp())
-                        #     # await websocket.send_text(
-                        #     #     json.dumps(to_chat_message(video_message))
-                        #     # )
-
-                        #     try:
-                        #         video_data = json.loads(fullVideoJson)
-                        #         if isinstance(video_data, dict) and "video_url" in video_data:
-                        #             await websocket.send_text(
-                        #                 json.dumps(
-                        #                     {
-                        #                         'role': 'video',
-                        #                         'timestamp': datetime.now(tz=timezone.utc).isoformat(),
-                        #                         'content': video_data['video_url'],
-                        #                     }
-                        #                 )
-                        #             ) 
-
-
-                        #         fullVideoJson = ''
-
-                        #         break
-
-                        #     except json.JSONDecodeError:
-                        #         pass
-                        # else:
-                        #     await websocket.send_text(
-                        #         json.dumps(to_chat_message(m))
-                        #     )
-
-
-
-                        # new_chunk = text[len(fullVideoJson):] if text.startswith(fullVideoJson) else text #Get the new part of text and put it in new_chunk
-                        # fullVideoJson += new_chunk
-
-                        # if fullVideoJson.strip().startswith("{") and (".mp4}" not in fullVideoJson): #Keep getting 'text' until .mp4} substring is found
-                        #     continue
-                        
-                        # elif ".mp4}" in fullVideoJson:
-                        #     video_message = ModelResponse(parts=[TextPart(fullVideoJson)], timestamp=result.timestamp())
-                        #     await websocket.send_text(
-                        #         json.dumps(to_chat_message(video_message))
-                        #     )
-
-                        #     fullVideoJson = ''
-                            
-                        # else:
-                        #     m = ModelResponse(parts=[TextPart(text)], timestamp=result.timestamp())
-
-                        #     await websocket.send_text(
-                        #         json.dumps(to_chat_message(m))
-                        #     )
     
                 await database.add_messages(result.new_messages_json())
         except Exception as e:
@@ -586,20 +474,6 @@ class ChatMessage(TypedDict):
 def to_chat_message(m: ModelMessage) -> ChatMessage:
     first_part = m.parts[0]
     if isinstance(m, ModelRequest):
-        # # Look for a user prompt in the parts.
-        # for part in m.parts:
-        #     if isinstance(part, UserPromptPart):
-        #         return {
-        #             'role': 'user',
-        #             'timestamp': part.timestamp.isoformat(),
-        #             'content': part.content,
-        #         }
-        # # Fallback if no explicit user prompt is found.
-        # return {
-        #     'role': 'user',
-        #     'timestamp': m.parts[0].timestamp.isoformat(),
-        #     'content': m.parts[0].content,
-        # }
         if isinstance(first_part, UserPromptPart):
             assert isinstance(first_part.content, str)
             return {

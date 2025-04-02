@@ -90,10 +90,6 @@ function PromptForm(){
             }
         };
 
-
-
-
-
         websocketRef.current.onclose = (event) => {
             console.log("WebSocket disconnected.");
         };
@@ -121,75 +117,83 @@ function PromptForm(){
     }
 
     return(
-        <div className="main-container">
-            <div id="conversation">
-                {messages.map((message, index) => (
-                    <div key={index} className={`message ${message.role}`}>
-                        {
-                        message.role === 'video' ? (
-                            <>  
-                                <p><b>Your Video</b></p>
-                                <video 
-                                    controls 
-                                    width="50%" 
-                                    preload="auto"
-                                    src={message.content}
-                                    onError={(e) => {
-                                        console.error("Video loading error:", e);
-                                        // Try to reload video on error
-                                        const vid = e.target;
-                                        vid.load();
-                                    }}
-                                    onLoadedData={() => console.log("Video loaded successfully")}
-                                ></video>
-                            </>
-                        ) :
-                        
-                        // message.role === 'video'? (
-                        //     <>  
-                        //         <p><b>Your Video</b></p>
-                        //         <video controls width="50%" src={message.content}></video>
-                        //     </>
-                        // ) : 
-                        // typeof message.content === 'object' && message.content.video_url? (
-                        //     <>
-                        //     </>
-                        // ) : 
-                        typeof message.content === 'object' && message.content.error ? (
-                            <>
-                                {console.log(message.content.error)}
-                            </>
-                        ) :
-                        message.role === 'user' && JSON.stringify(message.content).includes("Title")? (  //to prevent showing exra information sent by the search tool
-                            <>  
-                            </>
-                        ) :
-                        message.role === 'user'? (
-                            <>
-                                <p><b>You asked</b></p>
-                                <p>{message.content}</p>
-                            </>
-                        ) :
-                        (
-                        <>
-                            <p><b>AI Response</b></p>
-                            <ReactMarkdown>{message.content}</ReactMarkdown>
-                        </>
-                        )
-                        }
-                    </div>
-                ))}
-            </div>
-            {isLoading && (
-                    <div className="loader-container">
-                        <PulseLoader color="#3498db" />
-                    </div>
+<>
+      {/* Fixed Conversation Area: starts right below the header and above the prompt input */}
+      <div 
+        id="conversation" 
+        className="fixed top-20 bottom-16 left-0 right-0 max-w-4xl mx-auto px-4 overflow-y-auto pt-4"
+      >
+        {messages.map((message, index) => {
+          // Align user messages to the right and others to the left
+          const alignment = message.role === 'user' ? 'items-end' : 'items-start';
+          // Skip rendering messages that include "Title" in user messages if needed
+          if(message.role === 'user' && JSON.stringify(message.content).includes("Title")){
+            return null;
+          }
+          return (
+            <div key={index} className={`flex flex-col ${alignment} mb-4`}>
+              <span className="mb-1 text-s font-bold text-gray-700">
+                {message.role === 'video' ? "Your Video" : message.role === 'user' ? "You Asked" : "AI Response"}
+              </span>
+              <div className="max-w-md bg-white p-4 rounded-lg shadow-md text-left">
+                {message.role === 'video' ? (
+                  <video
+                    controls
+                    className="w-full mx-auto"
+                    preload="auto"
+                    src={message.content}
+                    onError={(e) => {
+                      console.error("Video loading error:", e);
+                      const vid = e.target;
+                      vid.load();
+                    }}
+                    onLoadedData={() => console.log("Video loaded successfully")}
+                  ></video>
+                ) : message.role === 'user' ? (
+                  <p>{message.content}</p>
+                ) : (
+                  <ReactMarkdown
+                    components={{
+                      a: ({node, ...props}) => (
+                        <a className="text-blue-400" {...props} />
+                      )
+                    }}
+                  >
+                    {message.content}
+                  </ReactMarkdown>
                 )}
-            <form className="form">
-                <input className="form-input" type="text" value={prompt} onChange={(e) => setPrompt(e.target.value)}/>
-                <button  className="form-button"type="submit" onClick={handleSubmit}>Submit</button>
-            </form>
-        </div>
+              </div>
+            </div>
+          );
+        })}
+        {isLoading && (
+          <div className="flex items-start mb-4">
+            <div className="p-4">
+              <PulseLoader color="#3498db" />
+            </div>
+          </div>
+        )}
+      </div>
+      {/* Fixed Prompt Input at the bottom */}
+      <form 
+        className="fixed bottom-0 left-0 right-0 max-w-4xl mx-auto bg-white border-t shadow-md p-4 flex items-center gap-2"
+        onSubmit={handleSubmit}
+      >
+        <input
+          className="flex-1 border border-gray-400 rounded p-2 shadow-md"
+          type="text"
+          value={prompt}
+          onChange={(e) => setPrompt(e.target.value)}
+          placeholder="Type your prompt..."
+        />
+        <button 
+          className="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600 transition"
+          type="submit"
+        >
+          Send
+        </button>
+      </form>
+    </>
     )
 }
 
