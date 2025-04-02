@@ -20,38 +20,6 @@ function PromptForm(){
             console.log("WebSocket connected.");
         }
 
-        // websocketRef.current.onmessage = (event) => {
-        //     if (!event.data) return;
-        //     let data = JSON.parse(event.data);
-        //     if (!data || !data.role) return;
-            
-        //     if(data.role === 'model'){
-
-        //         setIsLoading(false);
-                
-        //         setMessages(prev => {
-        //             if (prev.length && prev[prev.length -1].role === 'model'){
-        //                 const updatedLast = {
-        //                     ...prev[prev.length - 1],
-        //                     content: data.content
-        //                 };
-        //                 return [...prev.slice(0, prev.length -1), updatedLast];
-        //             } else{
-        //                 return [...prev, data];
-        //             }
-        //         }
-        //         )
-        //     }   
-        //     else {
-        //         if(data.role === 'video' || (typeof data.content === 'object' && data.content.error)){
-        //             setIsLoading(false);
-        //         }
-        //         setMessages(prev => [...prev, data]);
-        //     }
-
-        // };
-
-
         websocketRef.current.onmessage = (event) => {
             if (!event.data) return;
             
@@ -126,7 +94,7 @@ function PromptForm(){
         {messages.map((message, index) => {
           // Align user messages to the right and others to the left
           const alignment = message.role === 'user' ? 'items-end' : 'items-start';
-          // Skip rendering messages that include "Title" in user messages if needed
+          // Skipping rendering messages that include "Title" in user messages to not show extra information provided by the Web Search tool
           if(message.role === 'user' && JSON.stringify(message.content).includes("Title")){
             return null;
           }
@@ -184,7 +152,7 @@ function PromptForm(){
           type="text"
           value={prompt}
           onChange={(e) => setPrompt(e.target.value)}
-          placeholder="Type your prompt..."
+          placeholder="Type your prompt"
         />
         <button 
           className="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600 transition"
