@@ -453,16 +453,6 @@ async def async_chat(websocket: WebSocket):
 async def get_db(request: Request) -> Database:
     return request.state.db
 
-
-@app.get('/chat/')
-async def get_chat(database: Database = Depends(get_db)) -> Response:
-    msgs = await database.get_messages()
-    return Response(
-        b'\n'.join(json.dumps(to_chat_message(m)).encode('utf-8') for m in msgs),
-        media_type='text/plain',
-    )
-
-
 class ChatMessage(TypedDict):
     """Format of messages sent to the browser."""
 
