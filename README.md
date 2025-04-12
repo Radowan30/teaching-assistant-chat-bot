@@ -8,7 +8,7 @@ This document provides instructions for setting up and running the FastAPI chat 
 
 - **Real-time Chat Interface**: WebSocket-based chat with AI teaching assistant  
 - **Web Search Integration**: Uses Brave Search API to answer questions  
-- **Educational Animation Generation**: Creates educational videos using [Manim](https://www.manim.community/)  
+- **Educational Animation Generation**: Creates educational videos using Manim 
 - **Responsive UI**: React frontend with Tailwind CSS styling  
 
 ---
