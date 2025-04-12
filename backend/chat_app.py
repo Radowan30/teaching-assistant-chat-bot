@@ -9,7 +9,7 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from functools import partial
 from pathlib import Path
-from typing import Annotated, Any, Callable, Literal, TypeVar
+from typing import Any, Callable, Literal, TypeVar
 
 import fastapi
 import logfire
@@ -27,7 +27,6 @@ from pydantic_ai.messages import (
     ModelRequest,
     ModelResponse,
     TextPart,
-    ToolCallPart,
     UserPromptPart,
 )
 import os
@@ -342,7 +341,7 @@ async def async_chat(websocket: WebSocket):
             # Wait for a new prompt from the client.
             prompt = await websocket.receive_text()
             
-            # Immediately send back the user prompt.
+            #Immediately send back the user prompt.
             await websocket.send_text(
                 json.dumps({
                     'role': 'user',
@@ -355,95 +354,36 @@ async def async_chat(websocket: WebSocket):
                 messages = await database.get_messages()
                 brave_api_key = os.getenv('BRAVE_API_KEY', None)
                 deps = Deps(client=client, brave_api_key=brave_api_key)
-    
-                # Stream messages from the agent.
-                async with agent.run_stream(prompt, message_history=messages, deps=deps) as result:
 
-                    video_json_accumulator = ""
-                    collecting_video_json = False
-                    already_sent_video = False 
-                    
-                    async for text in result.stream(debounce_by=0.01):
-                        # Start collecting JSON when we detect potential video JSON
-                        if text.strip().startswith("{") and not collecting_video_json:
-                            collecting_video_json = True
-                            video_json_accumulator = text
-                            continue
+                if prompt.strip().startswith("@video"):
+                    result = await agent.run(prompt, message_history=messages, deps=deps)
+
+                    m = ModelResponse(parts=[TextPart(result.data)], timestamp=datetime.now(tz=timezone.utc))
+                    await websocket.send_text(
+                        json.dumps(to_chat_message(m))
+                    )
+
+                else:
+                    # Stream messages from the agent.
+                    async with agent.run_stream(prompt, message_history=messages, deps=deps) as result:
                         
-                        # Keep accumulating JSON parts
-                        if collecting_video_json:
-                            video_json_accumulator = text
-                            
-                            # If we have complete JSON (ending with closing brace)
-                            if "}" in text:
-                                try:
-                                    # Try to parse the complete JSON
-                                    video_data = json.loads(video_json_accumulator)
-                                    
-                                    # Check if it's a video URL
-                                    if isinstance(video_data, dict) and "video_url" in video_data:
-                                        # Verify video file exists and is accessible
-                                        video_path = video_data["video_url"].split("/")[-1]
-                                        full_path = os.path.join(THIS_DIR, "public", "videos", "2160p60", video_path)
-                                        
-                                        # Check if file exists
-                                        if os.path.exists(full_path):
-                                            # Send video message to client
-                                            await websocket.send_text(
-                                                json.dumps({
-                                                    'role': 'video',
-                                                    'timestamp': datetime.now(tz=timezone.utc).isoformat(),
-                                                    'content': video_data["video_url"],
-                                                })
-                                            )
-                                            already_sent_video = True
-                                            collecting_video_json = False
-                                            video_json_accumulator = ""
-                                            
-                                            continue
-                                
-                                except json.JSONDecodeError:
-                                    # Not valid JSON yet, continue collecting
-                                    pass
-                        
-                        # For regular text content (not part of video JSON)
-                        if not collecting_video_json:
+                        async for text in result.stream(debounce_by=0.01):
+
                             m = ModelResponse(parts=[TextPart(text)], timestamp=result.timestamp())
                             await websocket.send_text(
                                 json.dumps(to_chat_message(m))
                             )
-                            
-                    
 
-                    # Handle any remaining collected JSON that wasn't processed
-                    if collecting_video_json and video_json_accumulator:
-                        try:
-                            video_data = json.loads(video_json_accumulator)
-                            if isinstance(video_data, dict) and "video_url" in video_data:
-                                video_path = video_data["video_url"].split("/")[-1]
-                                full_path = os.path.join(THIS_DIR, "public", "videos", "2160p60", video_path)
-                                
-                                if os.path.exists(full_path) and not already_sent_video:
-                                    await websocket.send_text(
-                                        json.dumps({
-                                            'role': 'video',
-                                            'timestamp': datetime.now(tz=timezone.utc).isoformat(),
-                                            'content': video_data["video_url"],
-                                        })
-                                    )
-                                    
-                        except:
-                            # If we can't parse it as video JSON, send as regular text
-                            m = ModelResponse(parts=[TextPart(video_json_accumulator)], timestamp=result.timestamp())
-                            await websocket.send_text(
-                                json.dumps(to_chat_message(m))
-                            )
-
-                    await database.add_messages(result.new_messages_json())
+                        await database.add_messages(result.new_messages_json())
     
                 await database.add_messages(result.new_messages_json())
         except Exception as e:
-            await websocket.send_text(f"Error: {str(e)}")
+            error_msg = {
+                'role': 'model',
+                'timestamp': datetime.now(tz=timezone.utc).isoformat(),
+                'content': f"Error: {str(e)}"
+            }
+            await websocket.send_text(json.dumps(error_msg))
             break
 
     await websocket.close()
@@ -473,12 +413,16 @@ def to_chat_message(m: ModelMessage) -> ChatMessage:
             }
     elif isinstance(m, ModelResponse):
         if isinstance(first_part, TextPart):
-            content = first_part.content.strip()
+            content = first_part.content
             # Try to parse content as JSON.
             try:
                 data = json.loads(content)
                 if isinstance(data, dict) and "video_url" in data:
-                    if data["video_url"]:  # Only if URL is not empty
+                    # Verify video file exists and is accessible
+                    video_path = data["video_url"].split("/")[-1]
+                    full_path = os.path.join(THIS_DIR, "public", "videos", "2160p60", video_path)
+
+                    if data["video_url"] and os.path.exists(full_path):  # Only if URL is not empty
                         return {
                             'role': 'video',
                             'timestamp': m.timestamp.isoformat(),

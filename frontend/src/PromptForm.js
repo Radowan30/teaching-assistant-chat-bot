@@ -10,9 +10,9 @@ function PromptForm(){
     const [messages, setMessages] = useState([]);
     // Use a ref to persist the websocket connection across renders.
     const websocketRef = useRef(null);
-    //States and references to implement a workaround to prevent showing user message and video message twice upon reloading the page
-    const prevVideoContentRef = useRef('');
-    const prevUserContentRef = useRef('');
+    // //States and references to implement a workaround to prevent showing user message and video message twice upon reloading the page
+    // const prevVideoContentRef = useRef('');
+    // const prevUserContentRef = useRef('');
 
     // Create the websocket connection once when the component mounts.
     useEffect( () => {
@@ -32,13 +32,13 @@ function PromptForm(){
                 console.log("Received message:", data); // Add logging to debug
                 
                 if(data.role === 'video') {
-                  if(prevVideoContentRef.current === data.content){
-                      return;
-                  }
+                  // if(prevVideoContentRef.current === data.content){
+                  //     return;
+                  // }
                     // Video message received
                     console.log("Video message received:", data.content);
                     setIsLoading(false);
-                    prevVideoContentRef.current = data.content;
+                    // prevVideoContentRef.current = data.content;
                     setMessages(prev => [...prev, data]);
                 }
                 else if(data.role === 'model') {
@@ -57,10 +57,10 @@ function PromptForm(){
                     });
                 }
                 else {
-                    if(prevUserContentRef.current === data.content){
-                      return;
-                    }
-                    prevUserContentRef.current = data.content;
+                    // if(prevUserContentRef.current === data.content){
+                    //   return;
+                    // }
+                    // prevUserContentRef.current = data.content;
                     setMessages(prev => [...prev, data]);
                 }
             } catch (error) {
