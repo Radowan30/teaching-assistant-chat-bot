@@ -47,3 +47,9 @@ backend/public/*
 
 #Ignore the sqlite database
 backend/.chat_app_messages.sqlite
+
+#other ignores
+backend/.gitignore
+backend/chat_app.html
+backend/chat_app.ts 
+backend/requirements_old.txt
