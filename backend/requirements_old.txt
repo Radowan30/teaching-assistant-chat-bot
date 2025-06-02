@@ -1,0 +1,50 @@
+# Core web framework
+fastapi>=0.115.8
+uvicorn>=0.34.0
+websockets>=15.0
+python-multipart>=0.0.20
+
+# Async HTTP client
+httpx>=0.25.0
+
+# AI and ML tools
+pydantic-ai>=0.0.24
+openai>=1.6.0
+
+# Data validation and settings
+pydantic>=2.5.0
+pydantic-settings>=2.8.0
+typing-extensions>=4.8.0
+
+# Environment variables
+python-dotenv>=1.0.0
+
+# Logging and instrumentation
+logfire[fastapi]>=3.6.1
+opentelemetry-instrumentation-sqlite3>=0.51b0
+
+# Development tools
+devtools>=0.12.2
+
+# Mathematical animation engine
+manim==0.18.0
+
+# Additional utilities
+scoop>=0.7.2.0
+
+
+
+gunicorn==20.1.0
+werkzeug==2.3.7
+ffmpeg==1.4
+google-cloud-storage==2.10.0
+bs4==0.0.1
+manim-physics==0.4.0
+ManimPango==0.6.0
+mapbox_earcut==1.0.3
+markdown-it-py==3.0.0
+MarkupSafe==3.0.2
+matplotlib-inline==0.1.7
+beautifulsoup4==4.13.3
+fastjsonschema==2.21.1
+pandocfilters==1.5.1
