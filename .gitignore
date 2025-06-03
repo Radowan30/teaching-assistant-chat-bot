@@ -37,6 +37,7 @@ backend/*.egg-info
 # Virtual environments
 backend/.venv
 backend/venv311
+backend/venv
 
 #environment variables
 backend/.env
