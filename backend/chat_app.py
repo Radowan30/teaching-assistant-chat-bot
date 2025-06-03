@@ -104,11 +104,13 @@ async def async_chat(websocket: WebSocket):
                 if prompt.strip().startswith("@video"):
                     result = await agent.run(prompt, message_history=messages, deps=deps)
 
-                    m = ModelResponse(parts=[TextPart(result.data)], timestamp=datetime.now(tz=timezone.utc))
+                    content = str(result.data)
+
+                    m = ModelResponse(parts=[TextPart(content)], timestamp=datetime.now(tz=timezone.utc))
                     await websocket.send_text(
                         json.dumps(to_chat_message(m))
                     )
-
+                    await database.add_messages(result.new_messages_json())
                 else:
                     # Stream messages from the agent.
                     async with agent.run_stream(prompt, message_history=messages, deps=deps) as result:
@@ -122,7 +124,6 @@ async def async_chat(websocket: WebSocket):
 
                         await database.add_messages(result.new_messages_json())
     
-                await database.add_messages(result.new_messages_json())
         except Exception as e:
             error_msg = {
                 'role': 'model',
@@ -166,7 +167,7 @@ def to_chat_message(m: ModelMessage) -> ChatMessage:
                 if isinstance(data, dict) and "video_url" in data:
                     # Verify video file exists and is accessible
                     video_path = data["video_url"].split("/")[-1]
-                    full_path = os.path.join(THIS_DIR, "public", "videos", "2160p60", video_path)
+                    full_path = os.path.join(THIS_DIR, "public", "videos", "720p30", video_path)
 
                     if data["video_url"] and os.path.exists(full_path):  # Only if URL is not empty
                         return {

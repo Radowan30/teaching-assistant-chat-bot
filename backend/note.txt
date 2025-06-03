@@ -1,4 +1,4 @@
--install python version 3.11.x before installing the project dependencies.
+-install python version 3.11.x before installing the project dependencies. You MUST have python version 3.11 for the video compilation to work.
 
 -you may use 'py -3.11 -m venv venv311' to setup a new virtual environment with python 3.11.x.
 
