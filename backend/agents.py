@@ -2,6 +2,7 @@ from __future__ import annotations as _annotations
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Any
+import asyncio
 
 import logfire
 
@@ -45,7 +46,7 @@ agent: Agent[None, Union[Dict[str, Any], str]] = Agent( model,
 
     When needed you can be an expert at researching the web to answer user questions using the search_web() tool. 
 
-    You can also generate animation videos using the generate_manim_video() tool when the user passes a prompt that contains the keyword @video (do not invoke the generate_manim_video() tool unless this keyword is provided by the user), and when this tool is invoked you must return a Dict that only contains the key "video_url" with the URL to the generated video. Do not include any extra text with the Dict. It should be exactly of this format: 
+    You can also generate animation videos using the generate_manim_video() tool when the user passes a prompt that contains the keyword @video (do not invoke the generate_video() tool unless this keyword is provided by the user), and when this tool is invoked you must return a Dict that only contains the key "video_url" with the URL to the generated video. Do not include any extra text with the Dict. It should be exactly of this format: 
     
     "video_url": "URL" 
     
@@ -85,17 +86,26 @@ class GenScene(Scene):
 \`\`\`
 
 # Rules
+Rules:
 1. Always use GenScene as the class name, otherwise, the code will not work.
 2. Always use self.play() to play the animation, otherwise, the code will not work.
 3. Do not use text to explain the code, only the code.
 4. Do not explain the code, only the code.
 5. The LaTex distribution used is MikTeX.
-6. Make sure to create code so that it fits in a 16:9 aspect ratio.
-7. Make sure your code is lengthy so that the animation that will be generated from your Manim code explains the concept very well to the audience.
-8. Make sure there is text in the animation as if you are speaking to the audience. The text should fit with in the 16:9 aspect ratio and not overlap with other text.
-9. Make sure to only use the Manim library for the code.
-10. Think deeply about the animation and how it can explain the concept the best way possible.
-11. Code should be compatible with manim==0.18.0 and manim-physics==0.4.0.
+6. Make sure to create code so that the generated content (everything, including text) fits in a 16:9 aspect ratio and 720p resolution (The frame or camera will be set to 16:9 aspect ratio and 720p resolution will be added by another person in the code, so you don't have to set it).
+7. Make sure there is text in the animation as if you are speaking to the audience.
+8. Always fade out previous narration text before showing the next text. 
+9. Non-narration words must be far apart from each other.
+10. Make sure to only use the Manim library for the code.
+11. Code MUST be compatible with manim version 0.18.0 and manim-physics version 0.4.0, and all parameters, methods etc must be from manim version 0.18.0 and manim-physics version 0.4.0. This is a strict rule, so do not break it. Code using newer version of manim will not work. 
+12. Do not make use of any pictures or svgs of any kind, only use shapes and designs that can be made using Manim.
+13. Make sure to use raw string r"" for LaTeX expressions. Example: Do MathTex("F", "=", "m", r"\times", "a", ...) instead of MathTex("F", "=", "m", \times, "a", ...)
+14. Valid Manim color constants include: RED, GREEN, BLUE, WHITE, BLACK, GRAY, YELLOW, GOLD, PINK, 
+PURPLE, ORANGE, TEAL, LIGHT_BROWN. If you need other colors like BROWN, you must define them 
+explicitly using hex codes (e.g., BROWN = "#8B4513") at the top of the file.
+15. For chemical formulas or any mathematical notation with subscripts/superscripts, always use MathTex instead of Tex. Example: MathTex(r"H_2O") instead of Tex(r"H_2O")
+16. Make sure that any text does not come on topr of any shapes in the animation.
+17. Make sure to make the scene blank before moving on to a new idea or concept.
 
 # Manim Library
 {manimDocs}
@@ -204,7 +214,7 @@ def cleanup_manim_files():
 
 #Manim video generation tool
 @agent.tool
-async def generate_manim_video(ctx: RunContext, prompt: str) -> Dict[str, Any]:
+async def generate_video(ctx: RunContext, prompt: str) -> Dict[str, Any]:
 
     try:
             
@@ -222,12 +232,14 @@ async def generate_manim_video(ctx: RunContext, prompt: str) -> Dict[str, Any]:
 
         video_storage_file_name = f"video-{user_id}-{project_name}-{iteration}.mp4"
 
-        frame_size, frame_width = (3840, 2160), 14.22 #16:9 aspect ratio
+        frame_size = (1280, 720)  # 720p resolution
+        frame_width = 14.22 #16:9 aspect ratio
 
         modified_code = f"""
 from manim import *
 from math import *
-config.frame_size = {frame_size}
+config.pixel_width = {frame_size[0]}
+config.pixel_height = {frame_size[1]}
 config.frame_width = {frame_width}
 
 {manim_code}
@@ -243,10 +255,15 @@ config.frame_width = {frame_width}
         file_path = os.path.join(public_dir, file_name)
 
         # Write the code to the file
-        with open(file_path, "w") as f:
+        # with open(file_path, "w") as f:
+        #     f.write(modified_code)
+        
+        with open(file_path, "w", encoding='utf-8') as f:
             f.write(modified_code)
 
-    
+        # Give the filesystem a moment to sync
+        await asyncio.sleep(0.1)
+
         # video_file_path = os.path.join(public_dir, video_storage_file_name)
 
         # Video generation logic using dynamic import and programmatic rendering
@@ -259,11 +276,25 @@ config.frame_width = {frame_width}
         config.output_file = video_storage_file_name
         config.media_dir = "public"
         config.custom_folders = False  # Disable folder nesting so the video goes directly into "public"
-        
+        config.preview = False
+        config.quality = "medium_quality"  # Use medium quality
+
         scene = SceneClass()
         scene.render()
 
-        video_url = f"{BASE_URL.rstrip('/')}/public/videos/2160p60/{video_storage_file_name}"
+        # Check if video exists
+        video_path = os.path.join(public_dir, "videos", "720p30", video_storage_file_name)
+        if not os.path.exists(video_path):
+            print(f"Video file was not created at expected path: {video_path}", flush=True)
+            # Try to find it elsewhere
+            for root, _, files in os.walk(public_dir):
+                for file in files:
+                    if file == video_storage_file_name:
+                        video_path = os.path.join(root, file)
+                        print(f"Found video at: {video_path}", flush=True)
+                        break
+
+        video_url = f"{BASE_URL.rstrip('/')}/public/videos/720p30/{video_storage_file_name}"
 
         cleanup_manim_files()
         

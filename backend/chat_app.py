@@ -166,7 +166,7 @@ def to_chat_message(m: ModelMessage) -> ChatMessage:
                 if isinstance(data, dict) and "video_url" in data:
                     # Verify video file exists and is accessible
                     video_path = data["video_url"].split("/")[-1]
-                    full_path = os.path.join(THIS_DIR, "public", "videos", "2160p60", video_path)
+                    full_path = os.path.join(THIS_DIR, "public", "videos", "720p30", video_path)
 
                     if data["video_url"] and os.path.exists(full_path):  # Only if URL is not empty
                         return {
